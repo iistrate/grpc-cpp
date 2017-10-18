@@ -2,7 +2,7 @@
 
 # Setup
 Clone this repository:
-`git clone https://github.gatech.edu/akumar401/cs6210Project3.git`
+`git clone https://github.gatech.edu/jmistry6/cs6210Project3.git`
 
 # Dependencies
   1. `grpc` [How to Install](https://github.com/grpc/grpc/blob/master/INSTALL.md)
