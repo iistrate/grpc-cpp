@@ -3,7 +3,7 @@
   - In this project, you are going to implement major chunks of a simple distributed service using [grpc](http://www.grpc.io).
   - Learnings from this project will also help you in the next project as you will become familiar with grpc and multithreading with threadpool.
   - This is going to be a short project(`2 weeks`) so that you can devote more time to the next project.
-  - Due date: `Nov 4, 2016`
+  - Due date: `Nov 13, 2017`
   
 ### Overview
   - You are going to build a store (You can think of Amazon Store!), which receives requests from different users, querying the prices offered by the different registered vendors.
