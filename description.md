@@ -59,8 +59,10 @@
 ### Grading
 This project is not performance oriented, we will only test the functionality and correctness.  
 The Rubric will be:
-  - `Async client and server role of your store` - 50 pts
-  - `Threadpool management` - 50 pts
+  - `Async client of your store` - 4 pts.
+  - 'Async server of your store' - 4 pts.
+    - If you do 'Sync server', you only get 2pts.
+  - `Threadpool management` - 4 pts
   
 ### Deliverables
 Please follow the instructions carefully. The folder you hand in must contain the following:
