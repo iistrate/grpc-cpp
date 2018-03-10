@@ -60,6 +60,7 @@
 This project is not performance oriented, we will only test the functionality and correctness.  
 The Rubric will be:
   - `Async client of your store` - 4 pts.
+        - If you do 'Sync client', you only get 2pts.
   - 'Async server of your store' - 4 pts.
     - If you do 'Sync server', you only get 2pts.
   - `Threadpool management` - 4 pts
