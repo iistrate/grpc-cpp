@@ -52,7 +52,7 @@
   - Two binaries would be created `run_tests` and `run_vendors`
   - First run the command `./run_vendors ../src/vendor_addresses.txt &` to start a process which will run multiple servers on different threads listening to (ip_address:ports) from the file given as command line argument.
   - Then start up your store which will read the same address file to know vendors' listening addresses. Also, your store should start listening on a port(for clients to connect to) given as command line argument.
-  - Then finally run the command `./run_tests  $port_on_which_store_is_listening  $max_num_concurrent_client_requests` to start a process which will simulate real world clients sending requests at the same time.
+  - Then finally run the command `./run_tests $IP_and_port_on_which_store_is_listening $max_num_concurrent_client_requests` to start a process which will simulate real world clients sending requests at the same time.
   - This process read the queries from the file `product_query_list.txt`
   - It will send some queries and print back the results, which you can use to verify your whole system's flow.
 
