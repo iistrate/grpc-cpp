@@ -12,6 +12,7 @@ class Store {
 private:
 	std::string vendor_addresses;
 	std::vector <std::string> ip_addrresses;
+	Threadpool threadpool;
 
 public:
 	Store(std::string v_a):vendor_addresses(v_a) {
@@ -28,7 +29,7 @@ public:
 			}
 			myfile.close();
 		}
-		else std::cout << "Error loading IP addresses";
+		else std::cout << "Error loading IP addresses\n";
 	}
 
 	void show_ip_addresses() {
@@ -44,7 +45,7 @@ int main(int argc, char** argv) {
 		filename = (char*)"vendor_addresses.txt";
 	}
 	else {
-		filename = argv[2];
+		filename = argv[1];
 	}
 
 	Store store = Store(filename);
