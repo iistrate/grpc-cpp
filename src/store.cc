@@ -18,49 +18,6 @@ using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using grpc::Status;
 
-void run_server(const std::string server_address);
-
-class Store {
-
-private:
-	//vendor addresses filename
-	std::string vendor_addresses;
-	//vendor ip addresses
-	std::vector <std::string> ip_addrresses;
-	//threads
-	Threadpool threadpool;
-
-public:
-	Store(std::string v_a):vendor_addresses(v_a) {
-		this->populate_ip_addresses();
-	};
-	~Store() {}
-
-	void populate_ip_addresses() {
-		std::ifstream myfile(this->vendor_addresses);
-		if (myfile.is_open()) {
-			std::string ip_addr;
-			while(getline(myfile, ip_addr)) {
-				this->ip_addrresses.push_back(ip_addr);
-			}
-			myfile.close();
-		}
-		else std::cout << "Error loading IP addresses\n";
-	}
-
-	void show_ip_addresses() {
-		for (std::vector<std::string>::iterator it = this->ip_addrresses.begin(); it != this->ip_addrresses.end(); it++) {
-			std::cout << *it << std::endl;
-		}
-	}
-
-	const std::vector <std::string>& get_ip_addresses() {
-		return ip_addrresses;
-	}
-
-
-};
-
 class ServerImpl final {
  public:
   ~ServerImpl() {
@@ -71,23 +28,23 @@ class ServerImpl final {
 
   // There is no shutdown handling in this code.
   void Run(std::string addr) {
-    std::string server_address(addr);
+	std::cout << addr << std::endl;
+	std::string server_address(addr);
+	ServerBuilder builder;
+	// Listen on the given address without any authentication mechanism.
+	builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+	// Register "service_" as the instance through which we'll communicate with
+	// clients. In this case it corresponds to an *asynchronous* service.
+	builder.RegisterService(&service_);
+	// Get hold of the completion queue used for the asynchronous communication
+	// with the gRPC runtime.
+	cq_ = builder.AddCompletionQueue();
+	// Finally assemble the server.
+	server_ = builder.BuildAndStart();
+	std::cout << "Server listening on " << server_address << std::endl;
 
-    ServerBuilder builder;
-    // Listen on the given address without any authentication mechanism.
-    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-    // Register "service_" as the instance through which we'll communicate with
-    // clients. In this case it corresponds to an *asynchronous* service.
-    builder.RegisterService(&service_);
-    // Get hold of the completion queue used for the asynchronous communication
-    // with the gRPC runtime.
-    cq_ = builder.AddCompletionQueue();
-    // Finally assemble the server.
-    server_ = builder.BuildAndStart();
-    std::cout << "Server listening on " << server_address << std::endl;
-
-    // Proceed to the server's main loop.
-    HandleRpcs();
+	// Proceed to the server's main loop.
+	HandleRpcs();
   }
 
  private:
@@ -120,9 +77,20 @@ class ServerImpl final {
         // the one for this CallData. The instance will deallocate itself as
         // part of its FINISH state.
         new CallData(service_, cq_);
-
         // The actual processing.
-        reply_.products();
+
+        ///////////////////////////////////////////////////
+        //for each client request fire up a bid request for vendors
+        //////////////////////////////////////////////////
+
+        std::cout << request_.product_name() << std::endl;
+
+        //set retrieved product info
+        store::ProductInfo* product_info = reply_.add_products(); //add an individual ProductInfo
+        product_info->set_price(199);
+        product_info->set_vendor_id("wowzy)");
+
+        std::cout << reply_.products_size() << std::endl;
 
         //(prefix + request_.set_product_name());
 
@@ -179,11 +147,52 @@ class ServerImpl final {
       static_cast<CallData*>(tag)->Proceed();
     }
   }
-
   std::unique_ptr<ServerCompletionQueue> cq_;
   store::Store::AsyncService service_;
   std::unique_ptr<Server> server_;
 };
+
+
+class WalMart_Store {
+
+private:
+	//vendor addresses filename
+	std::string vendor_addresses;
+	//vendor ip addresses
+	std::vector <std::string> ip_addrresses;
+
+public:
+	WalMart_Store(std::string v_a):vendor_addresses(v_a) {
+		this->populate_ip_addresses();
+	};
+	~WalMart_Store() {}
+
+	void populate_ip_addresses() {
+		std::ifstream myfile(this->vendor_addresses);
+		if (myfile.is_open()) {
+			std::string ip_addr;
+			while(getline(myfile, ip_addr)) {
+				this->ip_addrresses.push_back(ip_addr);
+			}
+			myfile.close();
+		}
+		else std::cout << "Error loading IP addresses\n";
+	}
+
+	void show_ip_addresses() {
+		for (std::vector<std::string>::iterator it = this->ip_addrresses.begin(); it != this->ip_addrresses.end(); it++) {
+			std::cout << *it << std::endl;
+		}
+	}
+
+	const std::vector <std::string>& get_ip_addresses() {
+		return ip_addrresses;
+	}
+
+
+};
+
+
 
 char* filename;
 int main(int argc, char** argv) {
@@ -194,27 +203,12 @@ int main(int argc, char** argv) {
 		filename = argv[1];
 	}
 
-	Store my_store = Store(filename);
-	my_store.show_ip_addresses();
-
-//	run_server(my_store.get_ip_addresses()[2]);
+	WalMart_Store my_store = WalMart_Store(filename);
+	ServerImpl server;
+	server.Run(my_store.get_ip_addresses()[2]);
 
 	return EXIT_SUCCESS;
 }
-
-//void run_server(const std::string server_address)   {
-//	std::string server_addressess(server_address);
-//	store::Store::service_full_name(server_address);
-//
-//	grpc::ServerBuilder builder;
-//	builder.AddListeningPort(server_addressess, grpc::InsecureServerCredentials());
-//	builder.RegisterService(&service);
-//
-//	std::unique_ptr<Server> server(builder.BuildAndStart());
-//	std::cout << "Server listening on " << server_addressess << std::endl;
-
-//	server->Wait();
-//}
 
 //load vendor addresses
 	//on each product query server requests all of vendor servers for their bid on queried product
