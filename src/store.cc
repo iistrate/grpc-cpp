@@ -160,9 +160,11 @@ private:
 	std::string vendor_addresses;
 	//vendor ip addresses
 	std::vector <std::string> ip_addrresses;
+	//expose on
+	std::string listen_on;
 
 public:
-	WalMart_Store(std::string v_a):vendor_addresses(v_a) {
+	WalMart_Store(std::string v_a, std::string l_o):vendor_addresses(v_a), listen_on(l_o) {
 		this->populate_ip_addresses();
 	};
 	~WalMart_Store() {}
@@ -194,18 +196,23 @@ public:
 
 
 
-char* filename;
 int main(int argc, char** argv) {
-	if (argc < 2) {
-		filename = (char*)"vendor_addresses.txt";
+	std::string listen_on = "";
+	std::string vendor_addr = "vendor_addresses.txt";
+	int threads = 4;
+
+	if (argc != 3) {
+		std::cerr << "Error. Usage is ./store address threads\n";
+		return EXIT_FAILURE;
 	}
 	else {
-		filename = argv[1];
+		listen_on = (char*)argv[1];
+		threads = atoi(argv[2]);
 	}
 
-	WalMart_Store my_store = WalMart_Store(filename);
+	WalMart_Store my_store = WalMart_Store(vendor_addr, listen_on);
 	ServerImpl server;
-	server.Run(my_store.get_ip_addresses()[2]);
+	server.Run(listen_on);
 
 	return EXIT_SUCCESS;
 }
