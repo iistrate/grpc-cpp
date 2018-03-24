@@ -31,7 +31,7 @@ using grpc::CompletionQueue;
 
 
 typedef struct transport_t {
-	std::string ip;
+	store::ProductInfo* product_info;
 } transport_t;
 
 static std::queue<transport_t*> work_queue;
@@ -209,38 +209,16 @@ class ServerImpl final {
         // The actual processing.
 
 
-        transport_t* new_work = new transport_t;
-        new_work->ip = "0:0:0:0:209219021309321";
-        work_queue.push(new_work);
-        thread_pool->cv.notify_one();
-
         /////////////////////////////////////////////////////////////
         //for each client request fire up a bid request for vendors//
         /////////////////////////////////////////////////////////////
+        transport_t* new_work = new transport_t;
+        new_work->product_info = reply_.add_products();
 
-        //put work in queue???
+        work_queue.push(new_work);
+        thread_pool->cv.notify_one();
 
-        store::ProductInfo* product_info = reply_.add_products(); //add an individual ProductInfo
-        VendorClient client(grpc::CreateChannel(
-            my_store->get_ip_addresses()[1], grpc::InsecureChannelCredentials()));
 
-        vendor::BidReply reply = client.getProductBid(request_.product_name());
-
-        //fire up a thread
-        	//fire up an async connection to ip
-        		//retrieve price and vendor id
-
-        //////do stuff here
-
-        //set retrieved product info
-        product_info->set_price(reply.price());
-        product_info->set_vendor_id(reply.vendor_id());
-
-        // And we are done! Let the gRPC runtime know we've finished, using the
-        // memory address of this instance as the uniquely identifying tag for
-        // the event.
-        status_ = FINISH;
-        responder_.Finish(reply_, Status::OK, this);
       } else {
         GPR_ASSERT(status_ == FINISH);
         // Once in the FINISH state, deallocate ourselves (CallData).
@@ -314,7 +292,7 @@ int main(int argc, char** argv) {
 
 	thread_pool = new Threadpool();
 	for (int i = 0; i < threads; i++)	{
-		//fire up thread and send the ips with it, we don't really need them though.
+		//fire up thread and send the ips with it, we don't really need them though since store is global.
 		thread_pool->threads.push_back((ThreadPtr(new std::thread(thread_work, ips))));
 	}
 
@@ -330,21 +308,34 @@ void thread_work(std::vector <std::string> ips) {
 	while(1) {
 		//acquire mutex
 		std::unique_lock<std::mutex> lk(thread_pool->mutex_lock);
-		while(work_queue.empty()) {
-			//wait on cond variable
-			thread_pool->cv.wait(lk, []{return 1;});//http://en.cppreference.com/w/cpp/thread/condition_variable
-			std::cout << "Waiting fella" <<std::endl;
-			sleep(1);
-		}
+		//wait on cond variable
+		std::cout << "Waiting fella" <<std::endl;
+		thread_pool->cv.wait(lk, []{return !work_queue.empty();});//http://en.cppreference.com/w/cpp/thread/condition_variable
 		//pop from queue
 		transport_t* transport = work_queue.front();
 		work_queue.pop();
 		//release mutex
 		lk.unlock();
-		std::cout << "mutex unlocked " << transport->ip << std::endl;
-//		for (std::vector <std::string>::iterator it = ips.begin(); it != ips.end(); it++) {
-//			std::cout << *it << std::endl;
-//		}
+		std::cout << "mutex unlocked" << std::endl;
+
+		//do the actual work
+		for (std::vector <std::string>::iterator it_ip = ips.begin(); it_ip != ips.end(); it_ip++) {
+			store::ProductInfo* product_info = transport->product_info; //add an individual ProductInfo
+			VendorClient client(grpc::CreateChannel(
+				*it_ip, grpc::InsecureChannelCredentials()));
+
+			vendor::BidReply reply = client.getProductBid(request_.product_name());
+
+			//set retrieved product info
+			product_info->set_price(reply.price());
+			product_info->set_vendor_id(reply.vendor_id());
+        }
+
+        // And we are done! Let the gRPC runtime know we've finished, using the
+        // memory address of this instance as the uniquely identifying tag for
+        // the event.
+        status_ = FINISH;
+        responder_.Finish(reply_, Status::OK, this);
 	}
 }
 
