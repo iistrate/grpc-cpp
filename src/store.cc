@@ -5,6 +5,7 @@
 #include <fstream>
 #include <queue>
 #include <unistd.h>
+#include <signal.h>
 
 #include <grpcpp/grpcpp.h>
 #include <grpc/support/log.h>
@@ -248,6 +249,15 @@ class ServerImpl final {
 };
 
 
+static void _sig_handler(int signo){
+	if (signo == SIGINT || signo == SIGTERM){
+		std::cout << "kill cmd called" << std::endl;
+		my_store->~WalMart_Store();
+		thread_pool->~Threadpool();
+		exit(signo);
+	}
+}
+
 int main(int argc, char** argv) {
 	std::string listen_on = "";
 	std::string vendor_addr = "vendor_addresses.txt";
@@ -255,7 +265,7 @@ int main(int argc, char** argv) {
 
 	if (argc != 3) {
 		std::cerr << "Error. Usage is ./store address threads\n";
-		return EXIT_FAILURE;
+		exit(EXIT_FAILURE);
 	}
 	else {
 		listen_on = (char*)argv[1];
@@ -268,15 +278,23 @@ int main(int argc, char** argv) {
 	thread_pool = new Threadpool();
 	for (int i = 0; i < threads; i++)	{
 		//fire up thread and send the ips with it, we don't really need them though since store is global.
-		thread_pool->threads.push_back((ThreadPtr(new std::thread(thread_work, ips))));
+		thread_pool->threads.push_back(new std::thread(thread_work, ips));
 	}
 
 	ServerImpl server;
 	server.Run(listen_on);
 
-	free(my_store);
-	free(thread_pool);
-	return EXIT_SUCCESS;
+	if (signal(SIGTERM, _sig_handler) == SIG_ERR){
+		fprintf(stderr,"Can't catch SIGTERM...exiting.\n");
+		goto cleanup;
+	}
+
+	cleanup:
+		my_store->~WalMart_Store();
+		thread_pool->~Threadpool();
+		exit(EXIT_FAILURE);
+
+	exit(EXIT_SUCCESS);
 }
 
 void thread_work(std::vector <std::string> ips) {

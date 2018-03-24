@@ -22,8 +22,8 @@ int main(int argc, char** argv) {
     num_max_threads = 4;
   }
   else {
-    server_addr = "0.0.0.0:50053";
-    num_max_threads = 4;
+	server_addr = "0.0.0.0:50053";
+	num_max_threads = 4;
   }
 
   std::vector<ProductSpec> product_specs;
@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
 }
 
 
-bool warm_up(bool & is_done){
+void warm_up(bool & is_done){
   is_done = true;
 }
 
@@ -90,7 +90,6 @@ bool run_test(std::vector<ProductSpec>& product_specs, const int num_max_threads
 }
 
 void thread_task(const std::string server_addr, ProductSpec& p_spec, ProductQueryResult& pq_result, int query_id, bool& is_done) {
-
   if (!run_client(server_addr, p_spec.name_, pq_result)) {
     std::cout << "\nStore failed to receive reply for: " << p_spec.name_ << ", query id: " << query_id <<  std::endl;
   }
