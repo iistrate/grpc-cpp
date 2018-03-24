@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <queue>
+#include <unistd.h>
 
 #include <grpcpp/grpcpp.h>
 #include <grpc/support/log.h>
@@ -27,6 +29,57 @@ using grpc::ClientAsyncResponseReader;
 using grpc::ClientContext;
 using grpc::CompletionQueue;
 
+
+typedef struct transport_t {
+	std::string ip;
+} transport_t;
+
+static std::queue<transport_t*> work_queue;
+
+class WalMart_Store {
+
+private:
+	//vendor addresses filename
+	std::string vendor_addresses;
+	//vendor ip addresses
+	std::vector <std::string> ip_addrresses;
+	//expose on
+	std::string listen_on;
+
+public:
+	WalMart_Store(std::string v_a, std::string l_o):vendor_addresses(v_a), listen_on(l_o) {
+		this->populate_ip_addresses();
+	};
+	~WalMart_Store() {}
+
+	void populate_ip_addresses() {
+		std::ifstream myfile(this->vendor_addresses);
+		if (myfile.is_open()) {
+			std::string ip_addr;
+			while(getline(myfile, ip_addr)) {
+				this->ip_addrresses.push_back(ip_addr);
+			}
+			myfile.close();
+		}
+		else std::cout << "Error loading IP addresses\n";
+	}
+
+	void show_ip_addresses() {
+		for (std::vector<std::string>::iterator it = this->ip_addrresses.begin(); it != this->ip_addrresses.end(); it++) {
+			std::cout << *it << std::endl;
+		}
+	}
+
+	const std::vector <std::string>& get_ip_addresses() {
+		return ip_addrresses;
+	}
+
+};
+
+static WalMart_Store* my_store;
+static Threadpool* thread_pool;
+
+void thread_work(std::vector <std::string> ips);
 
 class VendorClient {
  public:
@@ -95,7 +148,6 @@ class VendorClient {
 };
 
 
-
 class ServerImpl final {
  public:
   ~ServerImpl() {
@@ -106,7 +158,6 @@ class ServerImpl final {
 
   // There is no shutdown handling in this code.
   void Run(std::string addr) {
-	std::cout << addr << std::endl;
 	std::string server_address(addr);
 	ServerBuilder builder;
 	// Listen on the given address without any authentication mechanism.
@@ -158,14 +209,20 @@ class ServerImpl final {
         // The actual processing.
 
 
+        transport_t* new_work = new transport_t;
+        new_work->ip = "0:0:0:0:209219021309321";
+        work_queue.push(new_work);
+        thread_pool->cv.notify_one();
+
         /////////////////////////////////////////////////////////////
         //for each client request fire up a bid request for vendors//
         /////////////////////////////////////////////////////////////
-        //0.0.0.0:50053
-        store::ProductInfo* product_info = reply_.add_products(); //add an individual ProductInfo
 
+        //put work in queue???
+
+        store::ProductInfo* product_info = reply_.add_products(); //add an individual ProductInfo
         VendorClient client(grpc::CreateChannel(
-            "0.0.0.0:50053", grpc::InsecureChannelCredentials()));
+            my_store->get_ip_addresses()[1], grpc::InsecureChannelCredentials()));
 
         vendor::BidReply reply = client.getProductBid(request_.product_name());
 
@@ -238,49 +295,6 @@ class ServerImpl final {
 };
 
 
-class WalMart_Store {
-
-private:
-	//vendor addresses filename
-	std::string vendor_addresses;
-	//vendor ip addresses
-	std::vector <std::string> ip_addrresses;
-	//expose on
-	std::string listen_on;
-
-public:
-	WalMart_Store(std::string v_a, std::string l_o):vendor_addresses(v_a), listen_on(l_o) {
-		this->populate_ip_addresses();
-	};
-	~WalMart_Store() {}
-
-	void populate_ip_addresses() {
-		std::ifstream myfile(this->vendor_addresses);
-		if (myfile.is_open()) {
-			std::string ip_addr;
-			while(getline(myfile, ip_addr)) {
-				this->ip_addrresses.push_back(ip_addr);
-			}
-			myfile.close();
-		}
-		else std::cout << "Error loading IP addresses\n";
-	}
-
-	void show_ip_addresses() {
-		for (std::vector<std::string>::iterator it = this->ip_addrresses.begin(); it != this->ip_addrresses.end(); it++) {
-			std::cout << *it << std::endl;
-		}
-	}
-
-	const std::vector <std::string>& get_ip_addresses() {
-		return ip_addrresses;
-	}
-
-
-};
-
-
-
 int main(int argc, char** argv) {
 	std::string listen_on = "";
 	std::string vendor_addr = "vendor_addresses.txt";
@@ -295,11 +309,43 @@ int main(int argc, char** argv) {
 		threads = atoi(argv[2]);
 	}
 
-	WalMart_Store my_store = WalMart_Store(vendor_addr, listen_on);
+	my_store = new WalMart_Store(vendor_addr, listen_on);
+	std::vector <std::string> ips = my_store->get_ip_addresses();
+
+	thread_pool = new Threadpool();
+	for (int i = 0; i < threads; i++)	{
+		//fire up thread and send the ips with it, we don't really need them though.
+		thread_pool->threads.push_back((ThreadPtr(new std::thread(thread_work, ips))));
+	}
+
 	ServerImpl server;
 	server.Run(listen_on);
 
+	free(my_store);
+	free(thread_pool);
 	return EXIT_SUCCESS;
+}
+
+void thread_work(std::vector <std::string> ips) {
+	while(1) {
+		//acquire mutex
+		std::unique_lock<std::mutex> lk(thread_pool->mutex_lock);
+		while(work_queue.empty()) {
+			//wait on cond variable
+			thread_pool->cv.wait(lk, []{return 1;});//http://en.cppreference.com/w/cpp/thread/condition_variable
+			std::cout << "Waiting fella" <<std::endl;
+			sleep(1);
+		}
+		//pop from queue
+		transport_t* transport = work_queue.front();
+		work_queue.pop();
+		//release mutex
+		lk.unlock();
+		std::cout << "mutex unlocked " << transport->ip << std::endl;
+//		for (std::vector <std::string>::iterator it = ips.begin(); it != ips.end(); it++) {
+//			std::cout << *it << std::endl;
+//		}
+	}
 }
 
 //load vendor addresses
