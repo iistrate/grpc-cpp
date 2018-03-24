@@ -29,9 +29,13 @@ using grpc::ClientAsyncResponseReader;
 using grpc::ClientContext;
 using grpc::CompletionQueue;
 
+enum CallStatus { CREATE, PROCESS, FINISH };
 
 typedef struct transport_t {
-	store::ProductInfo* product_info;
+    store::Store::AsyncService* service_;
+    ServerCompletionQueue* cq_;
+
+	void* instance_;
 } transport_t;
 
 static std::queue<transport_t*> work_queue;
@@ -176,7 +180,7 @@ class ServerImpl final {
 	HandleRpcs();
   }
 
- private:
+ public:
   // Class encompasing the state and logic needed to serve a request.
   class CallData {
    public:
@@ -190,43 +194,15 @@ class ServerImpl final {
     }
 
     void Proceed() {
-      if (status_ == CREATE) {
-        // Make this instance progress to the PROCESS state.
-        status_ = PROCESS;
-
-        // As part of the initial CREATE state, we *request* that the system
-        // start processing SayHello requests. In this request, "this" acts are
-        // the tag uniquely identifying the request (so that different CallData
-        // instances can serve different requests concurrently), in this case
-        // the memory address of this CallData instance.
-        service_->RequestgetProducts(&ctx_, &request_, &responder_, cq_, cq_,
-                                  this);
-      } else if (status_ == PROCESS) {
-        // Spawn a new CallData instance to serve new clients while we process
-        // the one for this CallData. The instance will deallocate itself as
-        // part of its FINISH state.
-        new CallData(service_, cq_);
-        // The actual processing.
-
-
-        /////////////////////////////////////////////////////////////
-        //for each client request fire up a bid request for vendors//
-        /////////////////////////////////////////////////////////////
-        transport_t* new_work = new transport_t;
-        new_work->product_info = reply_.add_products();
-
+    	transport_t* new_work = new transport_t;
+		new_work->instance_ = (void*)this;
+		new_work->cq_ = cq_;
+		new_work->service_ = service_;
         work_queue.push(new_work);
         thread_pool->cv.notify_one();
-
-
-      } else {
-        GPR_ASSERT(status_ == FINISH);
-        // Once in the FINISH state, deallocate ourselves (CallData).
-        delete this;
-      }
     }
 
-   private:
+   public:
     // The means of communication with the gRPC runtime for an asynchronous
     // server.
     store::Store::AsyncService* service_;
@@ -246,7 +222,6 @@ class ServerImpl final {
     ServerAsyncResponseWriter<store::ProductReply> responder_;
 
     // Let's implement a tiny state machine with the following states.
-    enum CallStatus { CREATE, PROCESS, FINISH };
     CallStatus status_;  // The current serving state.
   };
 
@@ -309,23 +284,42 @@ void thread_work(std::vector <std::string> ips) {
 		//acquire mutex
 		std::unique_lock<std::mutex> lk(thread_pool->mutex_lock);
 		//wait on cond variable
-		std::cout << "Waiting fella" <<std::endl;
+		std::cout << std::this_thread::get_id() << " joining the wait" << std::endl;
 		thread_pool->cv.wait(lk, []{return !work_queue.empty();});//http://en.cppreference.com/w/cpp/thread/condition_variable
 		//pop from queue
 		transport_t* transport = work_queue.front();
 		work_queue.pop();
 		//release mutex
 		lk.unlock();
-		std::cout << "mutex unlocked" << std::endl;
+		std::cout << std::this_thread::get_id() << " aquired lock " << std::endl;
 
-		//do the actual work
+    	if (((ServerImpl::CallData*)transport->instance_)->status_ == CREATE) {
+		// Make this instance progress to the PROCESS state.
+        ((ServerImpl::CallData*)transport->instance_)->status_ = PROCESS;
+
+		// As part of the initial CREATE state, we *request* that the system
+		// start processing SayHello requests. In this request, "this" acts are
+		// the tag uniquely identifying the request (so that different CallData
+		// instances can serve different requests concurrently), in this case
+		// the memory address of this CallData instance.
+        ((ServerImpl::CallData*)transport->instance_)->service_->RequestgetProducts(&((ServerImpl::CallData*)transport->instance_)->ctx_,
+        		&((ServerImpl::CallData*)transport->instance_)->request_, &((ServerImpl::CallData*)transport->instance_)->responder_,
+				((ServerImpl::CallData*)transport->instance_)->cq_, ((ServerImpl::CallData*)transport->instance_)->cq_,
+				((ServerImpl::CallData*)transport->instance_));
+    	}
+    	else if (((ServerImpl::CallData*)transport->instance_)->status_ == PROCESS) {
+        // Spawn a new CallData instance to serve new clients while we process
+        // the one for this CallData. The instance will deallocate itself as
+        // part of its FINISH state.
+        new ServerImpl::CallData(((ServerImpl::CallData*)transport->instance_)->service_, ((ServerImpl::CallData*)transport->instance_)->cq_);
+
+		//contact vendors
 		for (std::vector <std::string>::iterator it_ip = ips.begin(); it_ip != ips.end(); it_ip++) {
-			store::ProductInfo* product_info = transport->product_info; //add an individual ProductInfo
+			std::cout << std::this_thread::get_id() << " contacting vendor" << *it_ip << std::endl;
 			VendorClient client(grpc::CreateChannel(
 				*it_ip, grpc::InsecureChannelCredentials()));
-
-			vendor::BidReply reply = client.getProductBid(request_.product_name());
-
+			vendor::BidReply reply = client.getProductBid(((ServerImpl::CallData*)transport->instance_)->request_.product_name());
+			store::ProductInfo* product_info = ((ServerImpl::CallData*)transport->instance_)->reply_.add_products();
 			//set retrieved product info
 			product_info->set_price(reply.price());
 			product_info->set_vendor_id(reply.vendor_id());
@@ -334,11 +328,14 @@ void thread_work(std::vector <std::string> ips) {
         // And we are done! Let the gRPC runtime know we've finished, using the
         // memory address of this instance as the uniquely identifying tag for
         // the event.
-        status_ = FINISH;
-        responder_.Finish(reply_, Status::OK, this);
+		((ServerImpl::CallData*)transport->instance_)->status_ = FINISH;
+		((ServerImpl::CallData*)transport->instance_)->responder_.Finish(((ServerImpl::CallData*)transport->instance_)->reply_, Status::OK, ((ServerImpl::CallData*)transport->instance_));
+		std::cout << std::this_thread::get_id() << " done and done" << std::endl;
+    	}
+    	else {
+    		GPR_ASSERT(((ServerImpl::CallData*)transport->instance_)->status_ == FINISH);
+    		// Once in the FINISH state, deallocate ourselves (CallData).
+    		delete ((ServerImpl::CallData*)transport->instance_);
+    	}
 	}
 }
-
-//load vendor addresses
-	//on each product query server requests all of vendor servers for their bid on queried product
-	//once client (store) has answers from all vendors, we collate bid, vendor_id from vendors and send it back to client
