@@ -353,7 +353,7 @@ void thread_work(std::vector <std::string> ips) {
     	else {
     		GPR_ASSERT(((ServerImpl::CallData*)transport->instance_)->status_ == FINISH);
     		// Once in the FINISH state, deallocate ourselves (CallData).
-    		delete ((ServerImpl::CallData*)transport->instance_);
+    		delete transport->instance_;
     	}
 	}
 }

@@ -12,16 +12,19 @@
 #include <condition_variable>
 
 
-typedef std::unique_ptr<std::thread> ThreadPtr;
-
 class Threadpool {
 private:
 
 public:
 	Threadpool() {}
-	~Threadpool() {}
+	~Threadpool() {
+		for (int i = 0; i < threads.size(); i++) {
+			std::cout << threads[i]->get_id() << "cleaning up " << std::endl;
+			threads[i]->join();
+		}
+	}
 
-	std::vector <ThreadPtr> threads;
+	std::vector <std::thread*> threads;
 	std::mutex mutex_lock;
 	std::condition_variable cv;
 };
