@@ -251,7 +251,7 @@ class ServerImpl final {
 
 static void _sig_handler(int signo){
 	if (signo == SIGINT || signo == SIGTERM){
-		std::cout << "kill cmd called" << std::endl;
+		std::cout << "kill cmd fired" << std::endl;
 		delete my_store;
 		delete thread_pool;
 		exit(signo);
@@ -301,12 +301,17 @@ int main(int argc, char** argv) {
 }
 
 void thread_work(std::vector <std::string> ips) {
-	while(1) {
+	while(!thread_pool->is_joined()) {
 		//acquire mutex
 		std::unique_lock<std::mutex> lk(thread_pool->mutex_lock);
 		//wait on cond variable
 		std::cout << std::this_thread::get_id() << " joining the wait" << std::endl;
-		thread_pool->cv.wait(lk, []{return !work_queue.empty();});//http://en.cppreference.com/w/cpp/thread/condition_variable
+		thread_pool->cv.wait(lk, []{return thread_pool->is_joined() || !work_queue.empty();});//http://en.cppreference.com/w/cpp/thread/condition_variable
+
+		if (thread_pool->is_joined()) { //kind of ugly but works as intended.
+			break;
+		}
+
 		//pop from queue
 		transport_t* transport = work_queue.front();
 		work_queue.pop();
@@ -358,5 +363,15 @@ void thread_work(std::vector <std::string> ips) {
     		// Once in the FINISH state, deallocate ourselves (CallData).
     		delete transport;
     	}
+	}
+}
+
+Threadpool::~Threadpool() {
+	joined = true;
+	cv.notify_all();
+	for (int i = 0, j = threads.size(); i < j; i++) {
+		std::cout << "cleaning up " << threads[i]->get_id() << std::endl;
+		threads[i]->join();
+		delete threads[i]; //joined threads still occupy some memory.
 	}
 }
