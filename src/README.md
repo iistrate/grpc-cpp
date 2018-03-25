@@ -31,6 +31,9 @@ typedef struct transport_t {
 ## How it works
 After creating our store and threadpool, we instantiate `ServerImpl` and run it.
 `class ServerImpl` and `class VendorClient` have been uses as per the [HelloWorld example](https://github.com/grpc/grpc/tree/master/examples/cpp/helloworld). from the gRPC C++ Hello World Tutorial.
+* https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_client.cc
+* https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
+
 `class ServerImpl` has the `void Proceed()` as follows
 ~~~
     void Proceed() {
@@ -107,6 +110,8 @@ All in all, this was a simple project taking ~8h and was highly enjoyable. I had
 
 ## Resources
 1. [HelloWorld example gRPC](https://github.com/grpc/grpc/tree/master/examples/cpp/helloworld)
+    * https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_client.cc
+    * https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
 2. http://en.cppreference.com/w/cpp/thread/thread
 3. http://en.cppreference.com/w/cpp/thread/condition_variable
 4. https://github.com/grpc/grpc/issues/9728
