@@ -252,14 +252,16 @@ class ServerImpl final {
 static void _sig_handler(int signo){
 	if (signo == SIGINT || signo == SIGTERM){
 		std::cout << "kill cmd called" << std::endl;
-		my_store->~WalMart_Store();
-		thread_pool->~Threadpool();
+		delete my_store;
+		delete thread_pool;
 		exit(signo);
 	}
 }
 
+
+
 int main(int argc, char** argv) {
-	std::string listen_on = "";
+	std::string listen_on = "0:0:0:0:50093";
 	std::string vendor_addr = "vendor_addresses.txt";
 	int threads = 4;
 
@@ -270,6 +272,17 @@ int main(int argc, char** argv) {
 	else {
 		listen_on = (char*)argv[1];
 		threads = atoi(argv[2]);
+		if (threads < 1) {
+			std::cerr << "Error. Thread count must be > 0\n";
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	if (signal(SIGTERM, _sig_handler) == SIG_ERR || signal(SIGINT, _sig_handler) == SIG_ERR){
+		fprintf(stderr,"Can't catch SIGTERM or SIGINT...exiting.\n");
+		delete my_store;
+		delete thread_pool;
+		exit(EXIT_FAILURE);
 	}
 
 	my_store = new WalMart_Store(vendor_addr, listen_on);
@@ -283,16 +296,6 @@ int main(int argc, char** argv) {
 
 	ServerImpl server;
 	server.Run(listen_on);
-
-	if (signal(SIGTERM, _sig_handler) == SIG_ERR){
-		fprintf(stderr,"Can't catch SIGTERM...exiting.\n");
-		goto cleanup;
-	}
-
-	cleanup:
-		my_store->~WalMart_Store();
-		thread_pool->~Threadpool();
-		exit(EXIT_FAILURE);
 
 	exit(EXIT_SUCCESS);
 }
@@ -353,7 +356,7 @@ void thread_work(std::vector <std::string> ips) {
     	else {
     		GPR_ASSERT(((ServerImpl::CallData*)transport->instance_)->status_ == FINISH);
     		// Once in the FINISH state, deallocate ourselves (CallData).
-    		delete transport->instance_;
+    		delete transport;
     	}
 	}
 }

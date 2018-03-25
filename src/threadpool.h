@@ -18,9 +18,10 @@ private:
 public:
 	Threadpool() {}
 	~Threadpool() {
-		for (int i = 0; i < threads.size(); i++) {
+		for (int i = 0, j = threads.size(); i < j; i++) {
 			std::cout << threads[i]->get_id() << "cleaning up " << std::endl;
 			threads[i]->join();
+			delete threads[i]; //joined thread still occupies memory.
 		}
 	}
 
